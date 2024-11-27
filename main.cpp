@@ -11,6 +11,7 @@
 #include <pthread.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sstream>
 
 #include "Log_Process.h"
 
@@ -18,6 +19,10 @@
  * DEFINE
 *************************************************************************************************************/
 using namespace std;
+
+#define MAIN_DATA_THREAD_ID             "data"
+#define MAIN_CONNECT_THREAD_ID          "connect"
+#define MAIN_STORAGE_THREAD_ID          "storage"
 
 #define handle_error(msg) \
     do { perror(msg); exit(EXIT_FAILURE); } while (0)
@@ -28,16 +33,18 @@ using namespace std;
 *************************************************************************************************************/
 static string FIFO_NAME = "logFifo";
 
-static pthread_mutex_t fifo_lock = PTHREAD_MUTEX_INITIALIZER;
-
 /*************************************************************************************************************
  * FUNCTIONS
 *************************************************************************************************************/
-/**
- * Data_Thread_Handler
- */
+
 static void *Data_Thread_Handler(void *args) 
 {
+    // pthread_t thread_id = pthread_self();
+    // ostringstream thread_id_stream;
+
+    // Convert thread_id to string
+    // thread_id_stream << thread_id;
+
     int logfifoFd = open(FIFO_NAME.c_str(), O_WRONLY);
 
     if (logfifoFd == -1) 
@@ -45,23 +52,20 @@ static void *Data_Thread_Handler(void *args)
         handle_error("[Data_Thread] open()");
     }
 
-    string logMessage = "Log message from Data Thread\n";
+    string logMessage = "[" MAIN_DATA_THREAD_ID "] Temperature: 27";
 
     while (1)
     {
         // cout << "Data Thread running ...\n";
-        pthread_mutex_lock(&fifo_lock);
+        pthread_mutex_lock(&Log_Process::fifo_lock);
         write(logfifoFd, logMessage.c_str(), logMessage.size());
-        pthread_mutex_unlock(&fifo_lock);
-        sleep(2);
+        pthread_mutex_unlock(&Log_Process::fifo_lock);
+        sleep(1);
     }
 
     close(logfifoFd);
 }
 
-/**
- * Connection_Thread_Handler
- */
 static void *Connection_Thread_Handler(void *args) 
 {
     int logfifoFd = open(FIFO_NAME.c_str(), O_WRONLY);
@@ -71,21 +75,16 @@ static void *Connection_Thread_Handler(void *args)
         handle_error("[Connection_Thread] open()");
     }
 
-    string logMessage = "Log message from Connection Thread\n";
+    string logMessage = "[" MAIN_CONNECT_THREAD_ID "] Connected!!!";
     while (1)
     {
-        // cout << "Connection Thread running ...\n";
-        pthread_mutex_lock(&fifo_lock);
+        pthread_mutex_lock(&Log_Process::fifo_lock);
         write(logfifoFd, logMessage.c_str(), logMessage.size());
-        pthread_mutex_unlock(&fifo_lock);
-
-        sleep(2);
+        pthread_mutex_unlock(&Log_Process::fifo_lock);
+        sleep(1);
     }
 }
 
-/**
- * Storage_Thread_Handler
- */
 static void *Storage_Thread_Handler(void *args) 
 {
     int logfifoFd = open(FIFO_NAME.c_str(), O_WRONLY);
@@ -95,21 +94,16 @@ static void *Storage_Thread_Handler(void *args)
         handle_error("[Storage_Thread] open()");
     }
 
-    string logMessage = "Log message from Storage Thread\n";
+    string logMessage = "[" MAIN_STORAGE_THREAD_ID "] Data saving...";
     while (1)
     {
-        // cout << "Storage Thread running ...\n";
-        pthread_mutex_lock(&fifo_lock);
+        pthread_mutex_lock(&Log_Process::fifo_lock);
         write(logfifoFd, logMessage.c_str(), logMessage.size());
-        pthread_mutex_unlock(&fifo_lock);
-
+        pthread_mutex_unlock(&Log_Process::fifo_lock);
         sleep(2);
     }
 }
 
-/**
- * main_process
- */
 static int main_process(void)
 {
     int ret;
@@ -137,12 +131,15 @@ static int main_process(void)
     return 0;
 }
 
+/*************************************************************************************************************
+ * ENTRY FUNCTION
+*************************************************************************************************************/
 int main(int argc, char *argv[])
 {
     pid_t logger_pid;
 
     // Create FIFO for log process
-    if (mkfifo(FIFO_NAME.c_str(), 0666) == -1)
+    if (mkfifo(FIFO_NAME.c_str(), 0665) == -1)
     {
         if (errno != EEXIST)
         {
@@ -173,5 +170,4 @@ int main(int argc, char *argv[])
     // Remove FIFO
     unlink(FIFO_NAME.c_str());
     return 0;
-
 }

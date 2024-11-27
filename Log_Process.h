@@ -6,6 +6,7 @@
 /*************************************************************************************************************
  * INCLUDE
 *************************************************************************************************************/
+#include <vector>
 
 /*************************************************************************************************************
  * DEFINE
@@ -23,8 +24,11 @@ class Log_Process
 {
 private:
     string fifoName;
-    pthread_mutex_t fifo_lock = PTHREAD_MUTEX_INITIALIZER;
+    int logFile_fd;
+
+    void writeToLogFile(vector<char> buffer, ssize_t length);
 public:
+    static pthread_mutex_t fifo_lock;
     Log_Process(string fifo);
     void run();
 };
