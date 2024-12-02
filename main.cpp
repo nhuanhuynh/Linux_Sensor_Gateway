@@ -13,6 +13,11 @@
 #include <fcntl.h>
 #include <sstream>
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#include "handler_error.h"
 #include "Log_Process.h"
 
 /*************************************************************************************************************
@@ -24,14 +29,11 @@ using namespace std;
 #define MAIN_CONNECT_THREAD_ID          "connect"
 #define MAIN_STORAGE_THREAD_ID          "storage"
 
-#define handle_error(msg) \
-    do { perror(msg); exit(EXIT_FAILURE); } while (0)
-
-
 /*************************************************************************************************************
  * VARIABLES
 *************************************************************************************************************/
 static string FIFO_NAME = "logFifo";
+static int MAIN_TCP_PORT_NUMBER = 0;
 
 /*************************************************************************************************************
  * FUNCTIONS
@@ -57,9 +59,9 @@ static void *Data_Thread_Handler(void *args)
     while (1)
     {
         // cout << "Data Thread running ...\n";
-        pthread_mutex_lock(&Log_Process::fifo_lock);
-        write(logfifoFd, logMessage.c_str(), logMessage.size());
-        pthread_mutex_unlock(&Log_Process::fifo_lock);
+        // pthread_mutex_lock(&Log_Process::fifo_lock);
+        // write(logfifoFd, logMessage.c_str(), logMessage.size());
+        // pthread_mutex_unlock(&Log_Process::fifo_lock);
         sleep(1);
     }
 
@@ -68,20 +70,68 @@ static void *Data_Thread_Handler(void *args)
 
 static void *Connection_Thread_Handler(void *args) 
 {
-    int logfifoFd = open(FIFO_NAME.c_str(), O_WRONLY);
+    // Initialize TCP socket server, creat a subject for it
+    int server_fd, new_socket_fd;
+    int opt;
+    int len;
+    struct sockaddr_in serv_addr, client_addr;
+    int logfifoFd;
+    string logMessage;
+
+    // Socket create
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd == -1)
+        handle_error("socket()");
+
+    // Prevent: “address already in use”
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)))
+        handle_error("setsockopt()");
+
+    // Server initial
+    memset(&serv_addr, 0, sizeof(struct sockaddr_in));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(MAIN_TCP_PORT_NUMBER);
+    serv_addr.sin_addr.s_addr =  INADDR_ANY;
+
+    // Binding socket with server address
+    if (bind(server_fd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1)
+    {
+        handle_error("bind()");
+    }
+
+    // Listen to 5 connection
+    if (listen(server_fd, 50) == -1)
+    {
+        handle_error("listen()");
+    }
+
+    // Get client's information
+    len = sizeof(client_addr);
+
+    logfifoFd = open(FIFO_NAME.c_str(), O_WRONLY);
 
     if (logfifoFd == -1) 
     {
         handle_error("[Connection_Thread] open()");
     }
 
-    string logMessage = "[" MAIN_CONNECT_THREAD_ID "] Connected!!!";
     while (1)
     {
+        // listening for connection
+        new_socket_fd  = accept(server_fd, (struct sockaddr*)&client_addr, (socklen_t *)&len);
+        if (new_socket_fd == -1)
+        {
+            handle_error("accept()");
+        }
+
+        // Get client's IP
+        string client_ip(INET_ADDRSTRLEN, '\0');
+        inet_ntop(AF_INET, &client_addr.sin_addr, &client_ip[0], INET_ADDRSTRLEN);
+
+        logMessage = "[" MAIN_CONNECT_THREAD_ID "] Accepted a new connection from address: " + client_ip + ", set up at port: " + to_string(ntohs(serv_addr.sin_port));
         pthread_mutex_lock(&Log_Process::fifo_lock);
         write(logfifoFd, logMessage.c_str(), logMessage.size());
         pthread_mutex_unlock(&Log_Process::fifo_lock);
-        sleep(1);
     }
 }
 
@@ -97,9 +147,9 @@ static void *Storage_Thread_Handler(void *args)
     string logMessage = "[" MAIN_STORAGE_THREAD_ID "] Data saving...";
     while (1)
     {
-        pthread_mutex_lock(&Log_Process::fifo_lock);
-        write(logfifoFd, logMessage.c_str(), logMessage.size());
-        pthread_mutex_unlock(&Log_Process::fifo_lock);
+        // pthread_mutex_lock(&Log_Process::fifo_lock);
+        // write(logfifoFd, logMessage.c_str(), logMessage.size());
+        // pthread_mutex_unlock(&Log_Process::fifo_lock);
         sleep(2);
     }
 }
@@ -137,6 +187,16 @@ static int main_process(void)
 int main(int argc, char *argv[])
 {
     pid_t logger_pid;
+
+    // Get command line arguments
+    if (argc < 2) 
+    {
+        handle_error("No port provided\ncommand: ./Sensor_Gateway <port number>\n");
+    } 
+    else
+    {
+        MAIN_TCP_PORT_NUMBER = atoi(argv[1]);
+    }
 
     // Create FIFO for log process
     if (mkfifo(FIFO_NAME.c_str(), 0665) == -1)
