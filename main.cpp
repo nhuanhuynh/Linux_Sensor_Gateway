@@ -19,6 +19,7 @@
 
 #include "handler_error.h"
 #include "Log_Process.h"
+#include "Sensor_Data_Queue.h"
 
 /*************************************************************************************************************
  * DEFINE
@@ -29,11 +30,19 @@ using namespace std;
 #define MAIN_CONNECT_THREAD_ID          "connect"
 #define MAIN_STORAGE_THREAD_ID          "storage"
 
+#define MAIN_TCP_SERVER_BUFF_SIZE       256
+
 /*************************************************************************************************************
  * VARIABLES
 *************************************************************************************************************/
 static string FIFO_NAME = "logFifo";
 static int MAIN_TCP_PORT_NUMBER = 0;
+
+// Shared Data structure
+struct ThreadData 
+{
+    Sensor_Data_Queue* sharedDataQueue;
+};
 
 /*************************************************************************************************************
  * FUNCTIONS
@@ -41,11 +50,10 @@ static int MAIN_TCP_PORT_NUMBER = 0;
 
 static void *Data_Thread_Handler(void *args) 
 {
-    // pthread_t thread_id = pthread_self();
-    // ostringstream thread_id_stream;
-
-    // Convert thread_id to string
-    // thread_id_stream << thread_id;
+    // Get shared data queue argument
+    ThreadData* data = (ThreadData *)args;
+    Sensor_Data_Queue* sharedQueue = data->sharedDataQueue;
+    string logMessage;
 
     int logfifoFd = open(FIFO_NAME.c_str(), O_WRONLY);
 
@@ -54,18 +62,23 @@ static void *Data_Thread_Handler(void *args)
         handle_error("[Data_Thread] open()");
     }
 
-    string logMessage = "[" MAIN_DATA_THREAD_ID "] Temperature: 27";
 
+    int sensorData;
     while (1)
     {
-        // cout << "Data Thread running ...\n";
-        // pthread_mutex_lock(&Log_Process::fifo_lock);
-        // write(logfifoFd, logMessage.c_str(), logMessage.size());
-        // pthread_mutex_unlock(&Log_Process::fifo_lock);
-        sleep(1);
+        while (sharedQueue->pop(sensorData)) 
+        {
+            cout << "[" MAIN_DATA_THREAD_ID "] Received: " << sensorData << endl;
+            logMessage = "[" MAIN_DATA_THREAD_ID "] Received: " + sensorData;
+            pthread_mutex_lock(&Log_Process::fifo_lock);
+            write(logfifoFd, logMessage.c_str(), logMessage.size());
+            pthread_mutex_unlock(&Log_Process::fifo_lock);
+        }
+        // sleep(1);
     }
 
     close(logfifoFd);
+    return NULL;
 }
 
 static void *Connection_Thread_Handler(void *args) 
@@ -77,6 +90,13 @@ static void *Connection_Thread_Handler(void *args)
     struct sockaddr_in serv_addr, client_addr;
     int logfifoFd;
     string logMessage;
+    int sensor_data;
+    int numb_read;
+    char recvbuff[MAIN_TCP_SERVER_BUFF_SIZE];
+
+    // Get shared data queue argument
+    ThreadData* data = (ThreadData *)args;
+    Sensor_Data_Queue* sharedQueue = data->sharedDataQueue;
 
     // Socket create
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -107,7 +127,7 @@ static void *Connection_Thread_Handler(void *args)
 
     // Get client's information
     len = sizeof(client_addr);
-
+    // Open log FIFO
     logfifoFd = open(FIFO_NAME.c_str(), O_WRONLY);
 
     if (logfifoFd == -1) 
@@ -132,7 +152,25 @@ static void *Connection_Thread_Handler(void *args)
         pthread_mutex_lock(&Log_Process::fifo_lock);
         write(logfifoFd, logMessage.c_str(), logMessage.size());
         pthread_mutex_unlock(&Log_Process::fifo_lock);
+
+        sensor_data = 0;
+        while (1)
+        {
+            memset(recvbuff, 0, sizeof(recvbuff));
+            // Read data from client
+            numb_read = read(new_socket_fd, recvbuff, sizeof(recvbuff)-1);
+            if(numb_read == -1)
+            {
+                handle_error("read()");
+            }
+            // Get sensor data from buffer: temp:27 -> 27
+            sensor_data = atoi(&recvbuff[5]);
+            // Push to Queue
+            sharedQueue->push(sensor_data);
+            sharedQueue->set_done();
+        }
     }
+    return NULL;
 }
 
 static void *Storage_Thread_Handler(void *args) 
@@ -150,7 +188,7 @@ static void *Storage_Thread_Handler(void *args)
         // pthread_mutex_lock(&Log_Process::fifo_lock);
         // write(logfifoFd, logMessage.c_str(), logMessage.size());
         // pthread_mutex_unlock(&Log_Process::fifo_lock);
-        sleep(2);
+        // sleep(2);
     }
 }
 
@@ -161,15 +199,22 @@ static int main_process(void)
     pthread_t Connection_Thread;
     pthread_t Storage_Thread;
 
-    if (ret = pthread_create(&Data_Thread, NULL, &Data_Thread_Handler, NULL))
+    // Initialize Shared Data Queue
+    Sensor_Data_Queue sharedQueue;
+    ThreadData threadData = 
+    {
+        .sharedDataQueue = &sharedQueue
+    };
+
+    if (ret = pthread_create(&Data_Thread, NULL, &Data_Thread_Handler, &threadData))
     {
         handle_error("pthread_create()");
     }
-    if (ret = pthread_create(&Connection_Thread, NULL, &Connection_Thread_Handler, NULL))
+    if (ret = pthread_create(&Connection_Thread, NULL, &Connection_Thread_Handler, &threadData))
     {
         handle_error("pthread_create()");
     }
-    if (ret = pthread_create(&Storage_Thread, NULL, &Storage_Thread_Handler, NULL))
+    if (ret = pthread_create(&Storage_Thread, NULL, &Storage_Thread_Handler, &threadData))
     {
         handle_error("pthread_create()");
     }

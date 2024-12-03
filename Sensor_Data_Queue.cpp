@@ -41,10 +41,10 @@ bool Sensor_Data_Queue::pop(int& data)
     {
         data = dataQueue.front();
         dataQueue.pop();
+        pthread_mutex_unlock(&mutex);
         return true;
     }
     pthread_mutex_unlock(&mutex);
-
     return false;
 }
 
