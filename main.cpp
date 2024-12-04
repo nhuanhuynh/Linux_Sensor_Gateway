@@ -26,12 +26,13 @@
 *************************************************************************************************************/
 using namespace std;
 
-#define MAIN_DATA_THREAD_ID             "data"
-#define MAIN_CONNECT_THREAD_ID          "connect"
-#define MAIN_STORAGE_THREAD_ID          "storage"
+#define MAIN_DATA_THREAD_ID                 "data"
+#define MAIN_CONNECT_THREAD_ID              "connect"
+#define MAIN_STORAGE_THREAD_ID              "storage"
 
-#define MAIN_TCP_SERVER_BUFF_SIZE       256
-
+#define MAIN_TCP_SERVER_BUFF_SIZE           256
+#define MAIN_SENSOR_TOO_COLD_THRESHOLD      15
+#define MAIN_SENSOR_TOO_HOT_THRESHOLD       40
 /*************************************************************************************************************
  * VARIABLES
 *************************************************************************************************************/
@@ -50,10 +51,12 @@ struct ThreadData
 
 static void *Data_Thread_Handler(void *args) 
 {
+    string logMessage;
+    int sensorData;
+
     // Get shared data queue argument
     ThreadData* data = (ThreadData *)args;
     Sensor_Data_Queue* sharedQueue = data->sharedDataQueue;
-    string logMessage;
 
     int logfifoFd = open(FIFO_NAME.c_str(), O_WRONLY);
 
@@ -62,19 +65,23 @@ static void *Data_Thread_Handler(void *args)
         handle_error("[Data_Thread] open()");
     }
 
-
-    int sensorData;
     while (1)
     {
         while (sharedQueue->pop(sensorData)) 
         {
-            cout << "[" MAIN_DATA_THREAD_ID "] Received: " << sensorData << endl;
-            logMessage = "[" MAIN_DATA_THREAD_ID "] Received: " + sensorData;
+            logMessage = "[" MAIN_DATA_THREAD_ID "] Received: " + to_string(sensorData);
+            if (sensorData < MAIN_SENSOR_TOO_COLD_THRESHOLD)
+            {
+                logMessage = "[" MAIN_DATA_THREAD_ID "] Temperature is too cold: " + to_string(sensorData);
+            }
+            else if (sensorData > MAIN_SENSOR_TOO_HOT_THRESHOLD)
+            {
+                logMessage = "[" MAIN_DATA_THREAD_ID "] Temperature is too hot: " + to_string(sensorData);
+            }
             pthread_mutex_lock(&Log_Process::fifo_lock);
             write(logfifoFd, logMessage.c_str(), logMessage.size());
             pthread_mutex_unlock(&Log_Process::fifo_lock);
         }
-        // sleep(1);
     }
 
     close(logfifoFd);
@@ -163,6 +170,15 @@ static void *Connection_Thread_Handler(void *args)
             {
                 handle_error("read()");
             }
+            if (numb_read == 0)
+            {
+                logMessage = "[" MAIN_CONNECT_THREAD_ID "] Client disconnected";
+                pthread_mutex_lock(&Log_Process::fifo_lock);
+                write(logfifoFd, logMessage.c_str(), logMessage.size());
+                pthread_mutex_unlock(&Log_Process::fifo_lock);
+                break;
+            }
+
             // Get sensor data from buffer: temp:27 -> 27
             sensor_data = atoi(&recvbuff[5]);
             // Push to Queue
