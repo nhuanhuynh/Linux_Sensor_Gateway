@@ -15,13 +15,11 @@
 #include <ctime>
 
 #include "Log_Process.h"
+#include "handler_error.h"
 /*************************************************************************************************************
  * DEFINE
 *************************************************************************************************************/
 #define LOGGER_READ_BUFFER_LENGTH           256
-
-#define handle_error(msg) \
-    do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
 /*************************************************************************************************************
  * VARIABLES
@@ -59,7 +57,7 @@ void Log_Process::writeToLogFile(vector<char> buffer, ssize_t length)
     // Add newline for new data
     logStream << '\n';
 
-    cout << "[Log_Process] Received: " << logStream.str();
+    cout << logStream.str();
 
     // Write log into gateway.log
     if(write(logFile_fd, logStream.str().c_str(), logStream.str().size()) == -1)
