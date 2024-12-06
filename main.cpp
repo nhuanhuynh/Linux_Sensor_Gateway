@@ -33,6 +33,7 @@ using namespace std;
 #define MAIN_TCP_SERVER_BUFF_SIZE           256
 #define MAIN_SENSOR_TOO_COLD_THRESHOLD      15
 #define MAIN_SENSOR_TOO_HOT_THRESHOLD       40
+#define MAIN_NUM_OF_CONSUMERS               2
 /*************************************************************************************************************
  * VARIABLES
 *************************************************************************************************************/
@@ -68,21 +69,24 @@ static void *Data_Thread_Handler(void *args)
     while (1)
     {
         while (sharedQueue->pop(sensorData)) 
-        {
-            logMessage = "[" MAIN_DATA_THREAD_ID "] Received: " + to_string(sensorData);
-            if (sensorData < MAIN_SENSOR_TOO_COLD_THRESHOLD)
-            {
-                logMessage = "[" MAIN_DATA_THREAD_ID "] Temperature is too cold: " + to_string(sensorData);
-            }
-            else if (sensorData > MAIN_SENSOR_TOO_HOT_THRESHOLD)
-            {
-                logMessage = "[" MAIN_DATA_THREAD_ID "] Temperature is too hot: " + to_string(sensorData);
-            }
-            pthread_mutex_lock(&Log_Process::fifo_lock);
-            write(logfifoFd, logMessage.c_str(), logMessage.size());
-            pthread_mutex_unlock(&Log_Process::fifo_lock);
+                {
+                    if (sensorData < MAIN_SENSOR_TOO_COLD_THRESHOLD)
+                    {
+                        logMessage = "[" MAIN_DATA_THREAD_ID "] Temperature is too cold: " + to_string(sensorData);
+                    }
+                    else if (sensorData > MAIN_SENSOR_TOO_HOT_THRESHOLD)
+                    {
+                        logMessage = "[" MAIN_DATA_THREAD_ID "] Temperature is too hot: " + to_string(sensorData);
+                    }
+                    else
+                    {
+                        logMessage = "[" MAIN_DATA_THREAD_ID "] Received: " + to_string(sensorData);
+                    }
+                    pthread_mutex_lock(&Log_Process::fifo_lock);
+                    write(logfifoFd, logMessage.c_str(), logMessage.size());
+                    pthread_mutex_unlock(&Log_Process::fifo_lock);
+                }
         }
-    }
 
     close(logfifoFd);
     return NULL;
@@ -191,21 +195,32 @@ static void *Connection_Thread_Handler(void *args)
 
 static void *Storage_Thread_Handler(void *args) 
 {
+    int sensorData;
+    string logMessage;
+
+    // Get shared data queue argument
+    ThreadData* data = (ThreadData *)args;
+    Sensor_Data_Queue* sharedQueue = data->sharedDataQueue;
+
     int logfifoFd = open(FIFO_NAME.c_str(), O_WRONLY);
 
     if (logfifoFd == -1) 
     {
-        handle_error("[Storage_Thread] open()");
+        handle_error("open()");
     }
 
-    string logMessage = "[" MAIN_STORAGE_THREAD_ID "] Data saving...";
     while (1)
     {
-        // pthread_mutex_lock(&Log_Process::fifo_lock);
-        // write(logfifoFd, logMessage.c_str(), logMessage.size());
-        // pthread_mutex_unlock(&Log_Process::fifo_lock);
-        // sleep(2);
+        while (sharedQueue->pop(sensorData)) 
+        {
+            logMessage = "[" MAIN_STORAGE_THREAD_ID "] Received: " + to_string(sensorData);
+            pthread_mutex_lock(&Log_Process::fifo_lock);
+            write(logfifoFd, logMessage.c_str(), logMessage.size());
+            pthread_mutex_unlock(&Log_Process::fifo_lock);
+        }
     }
+
+    return NULL;
 }
 
 static int main_process(void)
@@ -216,7 +231,7 @@ static int main_process(void)
     pthread_t Storage_Thread;
 
     // Initialize Shared Data Queue
-    Sensor_Data_Queue sharedQueue;
+    Sensor_Data_Queue sharedQueue(MAIN_NUM_OF_CONSUMERS);
     ThreadData threadData = 
     {
         .sharedDataQueue = &sharedQueue
