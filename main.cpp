@@ -20,6 +20,7 @@
 #include "handler_error.h"
 #include "Log_Process.h"
 #include "Sensor_Data_Queue.h"
+#include "SQLite_DB.h"
 
 /*************************************************************************************************************
  * DEFINE
@@ -202,6 +203,13 @@ static void *Storage_Thread_Handler(void *args)
     ThreadData* data = (ThreadData *)args;
     Sensor_Data_Queue* sharedQueue = data->sharedDataQueue;
 
+    // Initilize SQL DB
+    SQLiteHandler sqlHandler("sensor_data.db");
+    if (!sqlHandler.initialize()) 
+    {
+        handle_error("sqlHandler.initialize()");
+    }
+
     int logfifoFd = open(FIFO_NAME.c_str(), O_WRONLY);
 
     if (logfifoFd == -1) 
@@ -213,10 +221,16 @@ static void *Storage_Thread_Handler(void *args)
     {
         while (sharedQueue->pop(sensorData)) 
         {
+            // Write log, @TODO: create a function to write log
             logMessage = "[" MAIN_STORAGE_THREAD_ID "] Received: " + to_string(sensorData);
             pthread_mutex_lock(&Log_Process::fifo_lock);
             write(logfifoFd, logMessage.c_str(), logMessage.size());
             pthread_mutex_unlock(&Log_Process::fifo_lock);
+            // Insert sensor data into DB
+            if (!sqlHandler.insertMeasurement(to_string(sensorData))) 
+            {
+                cerr << "[" MAIN_STORAGE_THREAD_ID "] Failed to insert measurement: " << sensorData << endl;
+            }
         }
     }
 

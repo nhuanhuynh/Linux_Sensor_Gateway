@@ -1,5 +1,5 @@
 CC := g++
-CFLAGS := -pthread -I.
+CFLAGS := -pthread -lsqlite3 -I.
 SRC := $(shell find . -type f -name '*.cpp')
 TARGET := Sensor_Gateway
 
