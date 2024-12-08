@@ -68,7 +68,7 @@ int main(int argc, char *argv[])
     char sendbuff[BUFF_SIZE];
 
     memset(sendbuff, '0', BUFF_SIZE);
-    snprintf(sendbuff, BUFF_SIZE, "nodeID: 01");
+    snprintf(sendbuff, BUFF_SIZE, "nodeID: 00");
 
     numb_write = write(server_fd, sendbuff, sizeof(sendbuff) -1);
     if (numb_write == -1)

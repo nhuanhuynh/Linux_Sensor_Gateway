@@ -5,4 +5,4 @@ all:
 	$(CC) -o client1 client1.c
 
 clean:
-	rm client
+	rm client client1

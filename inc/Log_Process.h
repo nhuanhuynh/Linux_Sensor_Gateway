@@ -25,7 +25,7 @@ class Log_Process
 private:
     string fifoName;
     int logFile_fd;
-
+    pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
     void writeToLogFile(vector<char> buffer, ssize_t length);
 public:
     static pthread_mutex_t fifo_lock;
