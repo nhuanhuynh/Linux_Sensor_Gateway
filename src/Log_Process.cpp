@@ -102,6 +102,7 @@ void Log_Process::write_log(string log)
 
     pthread_mutex_lock(&Log_Process::fifo_lock);
     write(fifoFd, log.c_str(), log.size());
+    // pthread_cond_signal(&cond);
     pthread_mutex_unlock(&Log_Process::fifo_lock);
 }
 
@@ -120,6 +121,7 @@ void Log_Process::run(void)
     while (1)
     {
         pthread_mutex_lock(&Log_Process::fifo_lock);
+        // pthread_cond_wait(&cond, &Log_Process::fifo_lock);
         ssize_t bytesRead = read(fifoFd, buffer.data(), buffer.size());
         pthread_mutex_unlock(&Log_Process::fifo_lock);
 
@@ -136,4 +138,3 @@ void Log_Process::run(void)
     close(logFile_fd);
     return;
 }
-
