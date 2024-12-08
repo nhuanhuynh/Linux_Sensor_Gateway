@@ -33,3 +33,6 @@
 # User's files
 Sensor_Gateway
 gateway.log
+client/client
+client/client1
+sensor_data.db

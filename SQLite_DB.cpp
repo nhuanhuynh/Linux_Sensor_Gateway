@@ -42,29 +42,21 @@ SQLiteHandler::~SQLiteHandler()
 
 bool SQLiteHandler::initialize()
 {
-    int logfifoFd = open(FIFO_NAME.c_str(), O_WRONLY);
     string logMessage;
-
-    if (logfifoFd == -1) 
-    {
-        handle_error("[Data_Thread] open()");
-    }
+    
+    // Initialize a logger
+    Log_Process Logger(FIFO_NAME);
 
     int rc = sqlite3_open(databaseName.c_str(), &db);
     if (rc) 
     {
         logMessage = "[" SQLITE_THREAD_ID "] Unable to connect to SQL server";
-        pthread_mutex_lock(&Log_Process::fifo_lock);
-        write(logfifoFd, logMessage.c_str(), logMessage.size());
-        pthread_mutex_unlock(&Log_Process::fifo_lock);
-
+        Logger.write_log(logMessage);
         handle_error("sqlite3_open()");
     }
 
     logMessage = "[" SQLITE_THREAD_ID "] Connection to SQL server established";
-    pthread_mutex_lock(&Log_Process::fifo_lock);
-    write(logfifoFd, logMessage.c_str(), logMessage.size());
-    pthread_mutex_unlock(&Log_Process::fifo_lock);
+    Logger.write_log(logMessage);
 
     const char* createTableSQL = 
         "CREATE TABLE IF NOT EXISTS SensorData ("
@@ -82,9 +74,7 @@ bool SQLiteHandler::initialize()
     }
 
     logMessage = "[" SQLITE_THREAD_ID "] New table created";
-    pthread_mutex_lock(&Log_Process::fifo_lock);
-    write(logfifoFd, logMessage.c_str(), logMessage.size());
-    pthread_mutex_unlock(&Log_Process::fifo_lock);
+    Logger.write_log(logMessage);
 
     return true;
 }

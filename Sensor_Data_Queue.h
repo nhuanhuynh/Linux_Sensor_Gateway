@@ -1,5 +1,5 @@
 /**
- * Log_Process.h
+ * Sensor_Data_Queue.h
  */
 #ifndef _SENSOR_DATA_QUEUE_
 #define _SENSOR_DATA_QUEUE_
