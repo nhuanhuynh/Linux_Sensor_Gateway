@@ -5,17 +5,21 @@
 /*************************************************************************************************************
  * INCLUDE
 *************************************************************************************************************/
-#include <sqlite3.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include "SQLite_DB.h"
 #include "handler_error.h"
+#include "Log_Process.h"
 
 /*************************************************************************************************************
  * DEFINE
 *************************************************************************************************************/
+#define SQLITE_THREAD_ID                 "storage"
 
 /*************************************************************************************************************
  * VARIABLES
 *************************************************************************************************************/
+static string FIFO_NAME = "logFifo";
 
 /*************************************************************************************************************
  * PRIVATE FUNCTIONS
@@ -38,11 +42,29 @@ SQLiteHandler::~SQLiteHandler()
 
 bool SQLiteHandler::initialize()
 {
+    int logfifoFd = open(FIFO_NAME.c_str(), O_WRONLY);
+    string logMessage;
+
+    if (logfifoFd == -1) 
+    {
+        handle_error("[Data_Thread] open()");
+    }
+
     int rc = sqlite3_open(databaseName.c_str(), &db);
     if (rc) 
     {
+        logMessage = "[" SQLITE_THREAD_ID "] Unable to connect to SQL server";
+        pthread_mutex_lock(&Log_Process::fifo_lock);
+        write(logfifoFd, logMessage.c_str(), logMessage.size());
+        pthread_mutex_unlock(&Log_Process::fifo_lock);
+
         handle_error("sqlite3_open()");
     }
+
+    logMessage = "[" SQLITE_THREAD_ID "] Connection to SQL server established";
+    pthread_mutex_lock(&Log_Process::fifo_lock);
+    write(logfifoFd, logMessage.c_str(), logMessage.size());
+    pthread_mutex_unlock(&Log_Process::fifo_lock);
 
     const char* createTableSQL = 
         "CREATE TABLE IF NOT EXISTS SensorData ("
@@ -58,6 +80,11 @@ bool SQLiteHandler::initialize()
         sqlite3_free(errMsg);
         handle_error("sqlite3_exec()");
     }
+
+    logMessage = "[" SQLITE_THREAD_ID "] New table created";
+    pthread_mutex_lock(&Log_Process::fifo_lock);
+    write(logfifoFd, logMessage.c_str(), logMessage.size());
+    pthread_mutex_unlock(&Log_Process::fifo_lock);
 
     return true;
 }

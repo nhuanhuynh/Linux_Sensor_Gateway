@@ -16,7 +16,8 @@ void chat_func(int server_fd)
 {
     int numb_write;
     char sendbuff[BUFF_SIZE];
-    while (1) {
+    while (1)
+    {
         memset(sendbuff, '0', BUFF_SIZE);
         printf("Please enter the message : ");
         fgets(sendbuff, BUFF_SIZE, stdin);
@@ -62,7 +63,31 @@ int main(int argc, char *argv[])
     if (connect(server_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == -1)
         handle_error("connect()");
 
-    chat_func(server_fd);
+    // Send nodeID
+    int numb_write;
+    char sendbuff[BUFF_SIZE];
+
+    memset(sendbuff, '0', BUFF_SIZE);
+    snprintf(sendbuff, BUFF_SIZE, "nodeID: 01");
+
+    numb_write = write(server_fd, sendbuff, sizeof(sendbuff) -1);
+    if (numb_write == -1)
+        handle_error("write()");
+
+    // chat_func(server_fd);
+    while (1)
+    {
+        for (int temperature = 14; temperature <= 41; temperature++)
+        {
+            memset(sendbuff, '0', BUFF_SIZE);
+            snprintf(sendbuff, BUFF_SIZE, "nodeID: 00 temperature: %d", temperature);
+            printf("Send: %s\n", sendbuff);
+            numb_write = write(server_fd, sendbuff, sizeof(sendbuff) -1);
+            if (numb_write == -1)
+                handle_error("write()");
+            sleep(1);
+        }
+    }
 
     return 0;
 }
