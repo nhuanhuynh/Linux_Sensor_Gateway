@@ -24,16 +24,15 @@ using namespace std;
 class Sensor_Data_Queue
 {
 private:
-    queue<int> dataQueue;
+    queue<string> dataQueue;
     pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
     pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
     bool done = false;
     int numofConsumer = 0;
 public:
     Sensor_Data_Queue(int num);
-    void push(const int& data);
-    bool pop(int& data);
-    bool peek(int& data);
+    void push(const string& data);
+    bool pop(string& data);
     void set_done();
     bool is_done();
 };

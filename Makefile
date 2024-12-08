@@ -7,4 +7,4 @@ all: $(SRC)
 	$(CC) -o $(TARGET) $(SRC) $(CFLAGS)
 
 clean:
-	rm Sensor_Gateway gateway.log
+	rm Sensor_Gateway gateway.log sensor_data.db
