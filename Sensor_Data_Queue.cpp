@@ -1,5 +1,5 @@
 /**
- * Log_Process.cpp
+ * Sensor_Data_Queue.cpp
  */
 
 /*************************************************************************************************************
@@ -30,7 +30,7 @@ Sensor_Data_Queue::Sensor_Data_Queue(int num)
     Sensor_Data_Queue::numofConsumer = num;
 }
 
-void Sensor_Data_Queue::push(const int& data)
+void Sensor_Data_Queue::push(const string& data)
 {
     pthread_mutex_lock(&mutex);
     dataQueue.push(data);
@@ -38,7 +38,7 @@ void Sensor_Data_Queue::push(const int& data)
     pthread_mutex_unlock(&mutex);
 }
 
-bool Sensor_Data_Queue::pop(int& data)
+bool Sensor_Data_Queue::pop(string& data)
 {
     pthread_mutex_lock(&mutex);
     pthread_cond_wait(&cond, &mutex);

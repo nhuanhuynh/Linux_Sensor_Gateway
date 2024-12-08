@@ -90,6 +90,21 @@ Log_Process::Log_Process(string fifo)
     return;
 }
 
+void Log_Process::write_log(string log)
+{
+    // Open log FIFO
+    int fifoFd = open(fifoName.c_str(), O_WRONLY);
+
+    if (fifoFd == -1) 
+    {
+        handle_error("[Log_Process] open()");
+    }
+
+    pthread_mutex_lock(&Log_Process::fifo_lock);
+    write(fifoFd, log.c_str(), log.size());
+    pthread_mutex_unlock(&Log_Process::fifo_lock);
+}
+
 void Log_Process::run(void)
 {
     vector<char> buffer(LOGGER_READ_BUFFER_LENGTH);

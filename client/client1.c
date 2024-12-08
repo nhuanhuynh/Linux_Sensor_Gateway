@@ -80,12 +80,12 @@ int main(int argc, char *argv[])
         for (int temperature = 14; temperature <= 41; temperature++)
         {
             memset(sendbuff, '0', BUFF_SIZE);
-            snprintf(sendbuff, BUFF_SIZE, "nodeID: 00 temperature: %d", temperature);
+            snprintf(sendbuff, BUFF_SIZE, "nodeID: 01 temperature: %d", temperature);
             printf("Send: %s\n", sendbuff);
             numb_write = write(server_fd, sendbuff, sizeof(sendbuff) -1);
             if (numb_write == -1)
                 handle_error("write()");
-            sleep(1);
+            sleep(2);
         }
     }
 
