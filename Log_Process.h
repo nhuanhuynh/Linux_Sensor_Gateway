@@ -31,6 +31,7 @@ public:
     static pthread_mutex_t fifo_lock;
     Log_Process(string fifo);
     void run();
+    void write_log(string log);
 };
 
 #endif // _LOG_PROCESS_

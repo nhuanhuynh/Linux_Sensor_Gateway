@@ -60,12 +60,8 @@ static void *Data_Thread_Handler(void *args)
     ThreadData* data = (ThreadData *)args;
     Sensor_Data_Queue* sharedQueue = data->sharedDataQueue;
 
-    int logfifoFd = open(FIFO_NAME.c_str(), O_WRONLY);
-
-    if (logfifoFd == -1) 
-    {
-        handle_error("[Data_Thread] open()");
-    }
+    // Initialize a logger
+    Log_Process Logger(FIFO_NAME);
 
     while (1)
     {
@@ -81,30 +77,22 @@ static void *Data_Thread_Handler(void *args)
             if (nodeID.empty())
             {
                 logMessage = "[" MAIN_DATA_THREAD_ID "] Received sensor data with invalid sensor node ID";
-                pthread_mutex_lock(&Log_Process::fifo_lock);
-                write(logfifoFd, logMessage.c_str(), logMessage.size());
-                pthread_mutex_unlock(&Log_Process::fifo_lock);
+                Logger.write_log(logMessage);
             }
             else if (stoi(temperature_node) < MAIN_SENSOR_TOO_COLD_THRESHOLD)
             {
                 logMessage = "[" MAIN_DATA_THREAD_ID "] The sensor node with nodeID: " + nodeID + 
                              " reports it is too cold (running avg temperature = " + temperature_node + ")";
-                pthread_mutex_lock(&Log_Process::fifo_lock);
-                write(logfifoFd, logMessage.c_str(), logMessage.size());
-                pthread_mutex_unlock(&Log_Process::fifo_lock);
+                Logger.write_log(logMessage);
             }
             else if (stoi(temperature_node) > MAIN_SENSOR_TOO_HOT_THRESHOLD)
             {
                 logMessage = "[" MAIN_DATA_THREAD_ID "] The sensor node with nodeID: " + nodeID + 
                              " reports it is too hot (running avg temperature = " + temperature_node + ")";
-                pthread_mutex_lock(&Log_Process::fifo_lock);
-                write(logfifoFd, logMessage.c_str(), logMessage.size());
-                pthread_mutex_unlock(&Log_Process::fifo_lock);
+                Logger.write_log(logMessage);
             }
         }
     }
-
-    close(logfifoFd);
     return NULL;
 }
 
@@ -115,7 +103,6 @@ static void *Connection_Thread_Handler(void *args)
     int opt;
     int len;
     struct sockaddr_in serv_addr, client_addr;
-    int logfifoFd;
     string logMessage;
     int numb_read;
     char recvbuff[MAIN_TCP_SERVER_BUFF_SIZE];
@@ -154,13 +141,9 @@ static void *Connection_Thread_Handler(void *args)
 
     // Get client's information
     len = sizeof(client_addr);
-    // Open log FIFO
-    logfifoFd = open(FIFO_NAME.c_str(), O_WRONLY);
 
-    if (logfifoFd == -1) 
-    {
-        handle_error("[Connection_Thread] open()");
-    }
+    // Initialize a logger
+    Log_Process Logger(FIFO_NAME);
 
     while (1)
     {
@@ -186,10 +169,8 @@ static void *Connection_Thread_Handler(void *args)
             }
             if (numb_read == 0)
             {
-                logMessage = "[" MAIN_CONNECT_THREAD_ID "] The sensor node with ID:" + nodeID + " has closed the connection";
-                pthread_mutex_lock(&Log_Process::fifo_lock);
-                write(logfifoFd, logMessage.c_str(), logMessage.size());
-                pthread_mutex_unlock(&Log_Process::fifo_lock);
+                logMessage = "[" MAIN_CONNECT_THREAD_ID "] The sensor node with ID: " + nodeID + " has closed the connection";
+                Logger.write_log(logMessage);
                 break;
             }
 
@@ -210,9 +191,7 @@ static void *Connection_Thread_Handler(void *args)
             else
             {
                 logMessage = "[" MAIN_CONNECT_THREAD_ID "] A sensor node with ID: " + nodeID + " has opened a new connection";
-                pthread_mutex_lock(&Log_Process::fifo_lock);
-                write(logfifoFd, logMessage.c_str(), logMessage.size());
-                pthread_mutex_unlock(&Log_Process::fifo_lock);
+                Logger.write_log(logMessage);
             }
         }
     }
@@ -235,12 +214,8 @@ static void *Storage_Thread_Handler(void *args)
         handle_error("sqlHandler.initialize()");
     }
 
-    int logfifoFd = open(FIFO_NAME.c_str(), O_WRONLY);
-
-    if (logfifoFd == -1) 
-    {
-        handle_error("open()");
-    }
+    // Initialize a logger
+    Log_Process Logger(FIFO_NAME);
 
     while (1)
     {
@@ -248,9 +223,8 @@ static void *Storage_Thread_Handler(void *args)
         {
             // Write log, @TODO: create a function to write log
             logMessage = "[" MAIN_STORAGE_THREAD_ID "] Stored: " + sensorData;
-            pthread_mutex_lock(&Log_Process::fifo_lock);
-            write(logfifoFd, logMessage.c_str(), logMessage.size());
-            pthread_mutex_unlock(&Log_Process::fifo_lock);
+            Logger.write_log(logMessage);
+
             // Insert sensor data into DB
             if (!sqlHandler.insertMeasurement(sensorData)) 
             {
